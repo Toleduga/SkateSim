@@ -13,14 +13,15 @@ void UMainAnimator::NativeUpdateAnimation(float DeltaSeconds)
     APawn* OwnerPawn = TryGetPawnOwner();
     if (!OwnerPawn) return;
 
-    ACharacter* Character = Cast<ACharacter>(OwnerPawn);
+    ASkateCharacter* Character = Cast<ASkateCharacter>(OwnerPawn);
     if (!Character) return;
 
     if (UCharacterMovementComponent* MoveComp = Character->GetCharacterMovement())
     {
         Speed = MoveComp->MaxWalkSpeed;
         isJump = MoveComp->IsFalling();
-        UE_LOG(LogTemp, Warning, TEXT("MaxWalkSpeed = %f"), Speed);
+        isFall = Character->bIsFall;
+        //UE_LOG(LogTemp, Warning, TEXT("MaxWalkSpeed = %f"), Speed);
 
     }
 }

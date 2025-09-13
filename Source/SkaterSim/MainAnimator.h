@@ -23,5 +23,8 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "Movement")
 	bool isJump = false;
 
+	UPROPERTY(BlueprintReadOnly, Category = "Movement")
+	bool isFall = false;
+
 
 };

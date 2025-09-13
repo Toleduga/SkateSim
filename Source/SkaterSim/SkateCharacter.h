@@ -55,11 +55,17 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Skate|Push")
 	float MinStrength = 900.f;   // ajusta a tu gusto (700–1200 suele ir bien)
 
+
+	//Jump
 	UPROPERTY(EditAnywhere, Category = "Skate|Push")
 	float JumpMaxhStrength = 600.f;
 
 	UPROPERTY(EditAnywhere, Category = "Skate|Push")
 	float JumpMinhStrength = 300.f;
+	FTimerHandle JumpCooldownTimer;
+	bool bIsJump = false;
+	bool bCanJumpAgain = true;
+
 
 
 	float Strength = 900.f;
@@ -82,12 +88,16 @@ protected:
 	// Estado para detectar flanco del botón adelante
 	bool bIsRolling = false; 
 	bool bIsPush = false;// estamos “rodando” tras un push
-	bool bIsJump = false;
+	
+
+	FTimerHandle FallResetTimer;
+
 
 
 public:
 	// Sets default values for this character's properties
 	ASkateCharacter();
+	bool bIsFall = false;
 
 protected:
 	// Called when the game starts or when spawned
@@ -105,8 +115,14 @@ protected:
 	void PushInput();
 	void PushInputEnd();
 	void JumpInput();
+	void ResetJump();
 	void BreakInput();
+	void Fall();
+	void ResetFall();
 	void Move(const FInputActionValue& InputValue);
-	void Look(const FInputActionValue& InputValue);
+
+	virtual void NotifyHit(UPrimitiveComponent* MyComp, AActor* Other, UPrimitiveComponent* OtherComp,
+		bool bSelfMoved, FVector HitLocation, FVector HitNormal,
+		FVector NormalImpulse, const FHitResult& Hit) override;
 
 };
