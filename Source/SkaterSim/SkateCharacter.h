@@ -5,6 +5,7 @@
 #include "InputActionValue.h"
 #include "SkateCharacter.generated.h"
 
+
 UCLASS()
 class SKATERSIM_API ASkateCharacter : public ACharacter
 {
@@ -16,9 +17,12 @@ class SKATERSIM_API ASkateCharacter : public ACharacter
 	UPROPERTY(VisibleAnywhere, meta = (AllowPrivateAcess = "true"))
 	class USpringArmComponent* SpringArm;
 
-	
+
 
 protected:
+
+	UPROPERTY(VisibleAnywhere)
+	class UStaticMeshComponent* Skateboard;
 
 	UPROPERTY(EditAnywhere, Category = "EnhancedInput")
 	class UInputMappingContext* InputMapping;

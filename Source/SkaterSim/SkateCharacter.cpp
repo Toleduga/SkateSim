@@ -6,6 +6,7 @@
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/StaticMeshComponent.h"
 
 // Sets default values
 ASkateCharacter::ASkateCharacter()
@@ -22,6 +23,9 @@ ASkateCharacter::ASkateCharacter()
 
 	bUseControllerRotationYaw = false;
 	GetCharacterMovement()->bOrientRotationToMovement = false;
+
+	Skateboard = CreateDefaultSubobject<UStaticMeshComponent>("Skateboard");
+	Skateboard->SetupAttachment(GetMesh(), FName("SkateBoardSocket"));
 
 }
 
