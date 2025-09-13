@@ -17,6 +17,11 @@ class SKATERSIM_API ASkateCharacter : public ACharacter
 	UPROPERTY(VisibleAnywhere, meta = (AllowPrivateAcess = "true"))
 	class USpringArmComponent* SpringArm;
 
+	UPROPERTY(EditAnywhere)
+	class UAnimSequence* MoveAnimation;
+
+	UPROPERTY(EditAnywhere)
+	class UAnimSequence* PushAnimation;
 
 
 protected:
@@ -43,21 +48,30 @@ protected:
 	class UInputAction* LookAction;
 
 
-	// --- Push (empuje de skate) ---
+	
 	UPROPERTY(EditAnywhere, Category = "Skate|Push")
-	float PushStrength = 1200.f;   // ajusta a tu gusto (700–1200 suele ir bien)
+	float PushStrength = 1200.f;   
 
 	UPROPERTY(EditAnywhere, Category = "Skate|Push")
 	float MinStrength = 900.f;   // ajusta a tu gusto (700–1200 suele ir bien)
 
+	UPROPERTY(EditAnywhere, Category = "Skate|Push")
+	float JumpMaxhStrength = 600.f;
+
+	UPROPERTY(EditAnywhere, Category = "Skate|Push")
+	float JumpMinhStrength = 300.f;
+
+
 	float Strength = 900.f;
 	float PushThreshold = 0.45f;  // umbral de “toque” hacia adelante
 	float BrakeThreshold = -0.35f;       // umbral “freno” (Y negativo)
-	float BrakeStrength = 1600.f;        // qué tan rápido se come la velocidad al frenar
+
+	UPROPERTY(EditAnywhere, Category = "Skate|Push")
+	float BrakeStrength = 900.f;        // qué tan rápido se come la velocidad al frenar
 	FVector SteeringInputY;
 
 	UPROPERTY(EditAnywhere, Category = "Skate|Push")
-	float TurnRateDegPerSec = 20.f;   // grados por segundo a plena X (ajusta 120–360)
+	float TurnRateDegPerSec = 0.4f;   // grados por segundo a plena X (ajusta 120–360)
 
 	
 	// Guardar fricción original para restaurar
@@ -66,8 +80,9 @@ protected:
 	float SavedBrakingDecel = -1.f;
 	
 	// Estado para detectar flanco del botón adelante
-	bool bIsRolling = false;             // estamos “rodando” tras un push
-
+	bool bIsRolling = false; 
+	bool bIsPush = false;// estamos “rodando” tras un push
+	bool bIsJump = false;
 
 
 public:

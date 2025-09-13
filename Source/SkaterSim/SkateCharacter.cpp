@@ -25,7 +25,9 @@ ASkateCharacter::ASkateCharacter()
 	GetCharacterMovement()->bOrientRotationToMovement = false;
 
 	Skateboard = CreateDefaultSubobject<UStaticMeshComponent>("Skateboard");
-	Skateboard->SetupAttachment(GetMesh(), FName("SkateBoardSocket"));
+	Skateboard->SetupAttachment(RootComponent);
+	GetMesh()->SetupAttachment(Skateboard);
+	//Skateboard->SetupAttachment(GetMesh(), FName("SkateBoardSocket"));
 
 }
 
@@ -52,8 +54,13 @@ void ASkateCharacter::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 	if (bIsRolling)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Strength = %f"), Strength);
-		AddMovementInput(SteeringInputY);
+		//UE_LOG(LogTemp, Warning, TEXT("Strength = %f"), Strength);
+		if (!GetCharacterMovement()->IsFalling())
+		{
+			AddMovementInput(SteeringInputY);
+		}
+
+		
 		
 	}
 	
@@ -89,17 +96,25 @@ void ASkateCharacter::PushInput()
 {
 	GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Red, "Pressed input action push");
 	GetCharacterMovement()->MaxWalkSpeed =  PushStrength;
-
+	bIsPush = true;
 }
 void ASkateCharacter::PushInputEnd()
 {
-	GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Red, "Pressed input action push");
+	GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Red, "Completed input action push");
 	GetCharacterMovement()->MaxWalkSpeed = MinStrength;
-
+	bIsPush = false;
 }
 
 void ASkateCharacter::JumpInput()
 {
+	if (bIsPush)
+	{
+		GetCharacterMovement()->JumpZVelocity = JumpMaxhStrength;
+	}
+	else
+	{
+		GetCharacterMovement()->JumpZVelocity = JumpMinhStrength;
+	}
 	ACharacter::Jump();
 }
 
@@ -129,6 +144,10 @@ void ASkateCharacter::Move(const FInputActionValue& InputValue)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("ForwardNow: X=%f"), bForwardNow);
 		bIsRolling = true;
+		if (PushAnimation)
+		{
+			//GetMesh()->PlayAnimation(PushAnimation, false);
+		}
 	}
 	// Freno (reduce CruiseSpeed)
 	if (bIsRolling && InputVector.Y < BrakeThreshold)
