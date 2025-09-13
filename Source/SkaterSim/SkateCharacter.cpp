@@ -33,13 +33,30 @@ ASkateCharacter::ASkateCharacter()
 void ASkateCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	if (auto* Move = GetCharacterMovement())
+	{
+		SavedGroundFriction = Move->GroundFriction;
+		SavedBrakingFrictionFactor = Move->BrakingFrictionFactor;
+		SavedBrakingDecel = Move->BrakingDecelerationWalking;
+
+		Move->bOrientRotationToMovement = true;     // que mire hacia donde se mueve
+		Move->RotationRate = FRotator(0.f, 540.f, 0.f);
+	}
+	PrimaryActorTick.bCanEverTick = true;
+
 }
 
 // Called every frame
 void ASkateCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
+	if (bIsRolling)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Strength = %f"), Strength);
+		AddMovementInput(SteeringInputY);
+		
+	}
+	
 }
 
 // Called to bind functionality to input
@@ -57,7 +74,8 @@ void ASkateCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 
 	if (UEnhancedInputComponent* Input = CastChecked<UEnhancedInputComponent>(PlayerInputComponent))
 	{
-		Input->BindAction(Push, ETriggerEvent::Completed, this, &ASkateCharacter::PushInput);
+		Input->BindAction(Push, ETriggerEvent::Started, this, &ASkateCharacter::PushInput);
+		Input->BindAction(Push, ETriggerEvent::Completed, this, &ASkateCharacter::PushInputEnd);
 		Input->BindAction(JumpAction, ETriggerEvent::Triggered, this, &ASkateCharacter::JumpInput);
 		Input->BindAction(BreakAction, ETriggerEvent::Triggered, this, &ASkateCharacter::BreakInput);
 		Input->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ASkateCharacter::Move);
@@ -70,6 +88,14 @@ void ASkateCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 void ASkateCharacter::PushInput()
 {
 	GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Red, "Pressed input action push");
+	GetCharacterMovement()->MaxWalkSpeed =  PushStrength;
+
+}
+void ASkateCharacter::PushInputEnd()
+{
+	GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Red, "Pressed input action push");
+	GetCharacterMovement()->MaxWalkSpeed = MinStrength;
+
 }
 
 void ASkateCharacter::JumpInput()
@@ -85,25 +111,44 @@ void ASkateCharacter::BreakInput()
 void ASkateCharacter::Move(const FInputActionValue& InputValue)
 {
 	FVector2D InputVector = InputValue.Get<FVector2D>();
+	if (!IsValid(Controller)) return;
 
-	if (IsValid(Controller))
+	//Get forward dirction
+	const FRotator Rotation = Controller->GetControlRotation();
+	const FRotator YawRotation(0, Rotation.Yaw, 0);
+
+	const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+	const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+
+	
+	SteeringInputY = ForwardDirection;
+
+	const bool bForwardNow = (InputVector.Y > PushThreshold);
+
+	if (!bIsRolling && InputVector.Y > PushThreshold)
 	{
-		//Get forward dirction
-		const FRotator Rotation = Controller->GetControlRotation();
-		const FRotator YawRotation(0, Rotation.Yaw, 0);
+		UE_LOG(LogTemp, Warning, TEXT("ForwardNow: X=%f"), bForwardNow);
+		bIsRolling = true;
+	}
+	// Freno (reduce CruiseSpeed)
+	if (bIsRolling && InputVector.Y < BrakeThreshold)
+	{
+		bIsRolling = false;
+	}
 
-		const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-		const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
-
+	AddControllerYawInput(InputVector.X * TurnRateDegPerSec);
 		// Add movement input
+		/*
 		UE_LOG(LogTemp, Warning, TEXT("InputVector: X=%f, Y=%f"), InputVector.X, InputVector.Y);
 		AddMovementInput(ForwardDirection, InputVector.Y);
 		AddMovementInput(RightDirection, InputVector.X);
-	}
+		*/
+	
 }
 
 void ASkateCharacter::Look(const FInputActionValue& InputValue)
 {
+	/*
 	FVector2D InputVector = InputValue.Get<FVector2D>();
 
 	if (IsValid(Controller))
@@ -111,4 +156,5 @@ void ASkateCharacter::Look(const FInputActionValue& InputValue)
 		AddControllerYawInput(InputVector.X);
 		AddControllerPitchInput(InputVector.Y);
 	}
+	*/
 }
