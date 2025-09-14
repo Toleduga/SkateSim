@@ -331,6 +331,7 @@ void ASkateCharacter::NotifyHit(UPrimitiveComponent* MyComp, AActor* Other, UPri
 void ASkateCharacter::AddPoints(int32 Amount)
 {
 	Score += Amount;
+	PlayerHUD->SetPoints(Score);
 	UE_LOG(LogTemp, Log, TEXT("Puntos sumados: %d | Total: %d"), Amount, Score);
 
 }
