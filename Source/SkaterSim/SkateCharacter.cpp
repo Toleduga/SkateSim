@@ -3,6 +3,8 @@
 #include "EnhancedInputSubsystems.h"
 #include "EnhancedInputComponent.h"
 #include "Camera/CameraComponent.h"
+#include "SkaterUI.h"
+#include "Blueprint/UserWidget.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -35,6 +37,8 @@ ASkateCharacter::ASkateCharacter()
 	RailCollider = CreateDefaultSubobject<UBoxComponent>("Rail Collider");
 	RailCollider->SetupAttachment(Skateboard);
 
+	PlayerHUDClass = nullptr;
+	PlayerHUD = nullptr;
 
 }
 
@@ -42,6 +46,15 @@ ASkateCharacter::ASkateCharacter()
 void ASkateCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (IsLocallyControlled() && PlayerHUDClass)
+	{
+		PlayerHUD = CreateWidget<USkaterUI>(GetWorld(), PlayerHUDClass);
+		check(PlayerHUD);
+		PlayerHUD->AddToPlayerScreen();
+
+	}
+
 	if (auto* Move = GetCharacterMovement())
 	{
 		SavedGroundFriction = Move->GroundFriction;

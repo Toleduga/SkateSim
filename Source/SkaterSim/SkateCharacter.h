@@ -24,6 +24,12 @@ class SKATERSIM_API ASkateCharacter : public ACharacter
 	UPROPERTY(EditAnywhere)
 	class UAnimSequence* PushAnimation;
 
+	UPROPERTY(EditAnywhere)
+	TSubclassOf<class USkaterUI> PlayerHUDClass;
+
+	UPROPERTY()
+	class USkaterUI* PlayerHUD;
+
 
 
 protected:
@@ -91,7 +97,7 @@ protected:
 
 	FTimerHandle FallResetTimer;
 	FRotator InitialMeshRelativeRotation;
-	int32 Score = 0;
+	
 
 
 public:
@@ -102,10 +108,13 @@ public:
 	UBoxComponent* RailCollider;
 
 	bool bIsFall = false;
+	int32 Score = 0;
 
 protected:
-	// Called when the game starts or when spawned
+
 	virtual void BeginPlay() override;
+
+
 
 public:	
 	virtual void Tick(float DeltaTime) override;
