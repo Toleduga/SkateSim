@@ -49,18 +49,17 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "EnhancedInput")
 	class UInputAction* LookAction;
 
-
 	
 	UPROPERTY(EditAnywhere, Category = "Skate|Push")
 	float PushStrength = 1200.f;   
 
 	UPROPERTY(EditAnywhere, Category = "Skate|Push")
-	float MinStrength = 900.f;   // ajusta a tu gusto (700–1200 suele ir bien)
+	float MinStrength = 900.f;   
 
 
 	//Jump
 	UPROPERTY(EditAnywhere, Category = "Skate|Push")
-	float JumpMaxhStrength = 600.f;
+	float JumpMaxhStrength = 700.f;
 
 	UPROPERTY(EditAnywhere, Category = "Skate|Push")
 	float JumpMinhStrength = 300.f;
@@ -71,33 +70,32 @@ protected:
 
 
 	float Strength = 900.f;
-	float PushThreshold = 0.45f;  // umbral de “toque” hacia adelante
-	float BrakeThreshold = -0.35f;       // umbral “freno” (Y negativo)
+	float PushThreshold = 0.45f;  
+	float BrakeThreshold = -0.35f;       
 
 	UPROPERTY(EditAnywhere, Category = "Skate|Push")
-	float BrakeStrength = 900.f;        // qué tan rápido se come la velocidad al frenar
+	float BrakeStrength = 900.f;        
 	FVector SteeringInputY;
 
 	UPROPERTY(EditAnywhere, Category = "Skate|Push")
-	float TurnRateDegPerSec = 0.4f;   // grados por segundo a plena X (ajusta 120–360)
+	float TurnRateDegPerSec = 0.4f;   
 
-	
-	// Guardar fricción original para restaurar
 	float SavedGroundFriction = -1.f;
 	float SavedBrakingFrictionFactor = -1.f;
 	float SavedBrakingDecel = -1.f;
 	
-	// Estado para detectar flanco del botón adelante
+
 	bool bIsRolling = false; 
-	bool bIsPush = false;// estamos “rodando” tras un push
+	bool bIsPush = false;
 	
 
 	FTimerHandle FallResetTimer;
-
+	FRotator InitialMeshRelativeRotation;
+	int32 Score = 0;
 
 
 public:
-	// Sets default values for this character's properties
+
 	ASkateCharacter();
 
 	UPROPERTY(VisibleAnywhere)
@@ -110,10 +108,9 @@ protected:
 	virtual void BeginPlay() override;
 
 public:	
-	// Called every frame
 	virtual void Tick(float DeltaTime) override;
-
-	// Called to bind functionality to input
+	void AddPoints(int32 Amount);
+	void GetPoints();
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 protected:
@@ -125,6 +122,8 @@ protected:
 	void BreakInput();
 	void Fall();
 	void ResetFall();
+	void TeleportPlayerToPlayerStart(AController* PlayerController);
+	void ResetRagdoll();
 	void Move(const FInputActionValue& InputValue);
 
 	virtual void NotifyHit(UPrimitiveComponent* MyComp, AActor* Other, UPrimitiveComponent* OtherComp,

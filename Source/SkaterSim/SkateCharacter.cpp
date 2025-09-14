@@ -1,4 +1,3 @@
-
 #include "SkaterSim/SkateCharacter.h"
 #include "InputMappingContext.h"
 #include "EnhancedInputSubsystems.h"
@@ -8,12 +7,16 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "GameFramework/PlayerStart.h"
+#include "EngineUtils.h"
+#include "Obstacle.h"
 
 // Sets default values
 ASkateCharacter::ASkateCharacter()
 {
  	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
+	
 
 	SpringArm = CreateDefaultSubobject<USpringArmComponent>("Spring Arm");
 	SpringArm->SetupAttachment(RootComponent);
@@ -32,6 +35,7 @@ ASkateCharacter::ASkateCharacter()
 	RailCollider = CreateDefaultSubobject<UBoxComponent>("Rail Collider");
 	RailCollider->SetupAttachment(Skateboard);
 
+
 }
 
 // Called when the game starts or when spawned
@@ -44,9 +48,10 @@ void ASkateCharacter::BeginPlay()
 		SavedBrakingFrictionFactor = Move->BrakingFrictionFactor;
 		SavedBrakingDecel = Move->BrakingDecelerationWalking;
 
-		Move->bOrientRotationToMovement = true;     // que mire hacia donde se mueve
+		Move->bOrientRotationToMovement = true; 
 		Move->RotationRate = FRotator(0.f, 540.f, 0.f);
 	}
+	InitialMeshRelativeRotation = GetMesh()->GetRelativeRotation();
 	PrimaryActorTick.bCanEverTick = true;
 
 
@@ -62,12 +67,11 @@ void ASkateCharacter::Tick(float DeltaTime)
 		if (!GetCharacterMovement()->IsFalling() && !bIsFall)
 		{
 			AddMovementInput(SteeringInputY);
+
 		}	
 	}
 
 	
-
-
 	UCharacterMovementComponent* Move = GetCharacterMovement();
 	if (!Move) return;
 
@@ -145,7 +149,8 @@ void ASkateCharacter::PushInputEnd()
 
 void ASkateCharacter::JumpInput()
 {
-	if (!bCanJumpAgain || !GetCharacterMovement()->IsMovingOnGround())
+	//if (!bCanJumpAgain || !GetCharacterMovement()->IsMovingOnGround())
+	if (!bCanJumpAgain)
 		return;
 
 	if (bIsPush)
@@ -176,23 +181,71 @@ void ASkateCharacter::Fall()
 {
 	bIsFall = true;
 	BreakInput();
+	GetCharacterMovement()->DisableMovement();
+	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	USkeletalMeshComponent* MeshComp = GetMesh();
+	if (MeshComp)
+	{
+		MeshComp->SetCollisionProfileName(TEXT("Ragdoll"));
+		MeshComp->SetSimulatePhysics(true);
+	}
 	GetWorldTimerManager().SetTimer(FallResetTimer, this, &ASkateCharacter::ResetFall, 2.0f, false);
 }
 
 void ASkateCharacter::ResetFall()
 {
+	ResetRagdoll();
+	BreakInput();
 	bIsFall = false;
-
-	const float TeleportDistance = 300.f; 
-
-	FVector BackDirection = -GetActorForwardVector();
-	BackDirection.Z = 0.f;
-	BackDirection.Normalize();
-
-	FVector NewLocation = GetActorLocation() + BackDirection * TeleportDistance;
-
-	SetActorLocation(NewLocation, true);
+	TeleportPlayerToPlayerStart(GetWorld()->GetFirstPlayerController());
 }
+
+void ASkateCharacter::ResetRagdoll()
+{
+	USkeletalMeshComponent* MeshComp = GetMesh();
+	if (MeshComp)
+	{
+		MeshComp->SetSimulatePhysics(false);
+		MeshComp->SetCollisionProfileName(TEXT("CharacterMesh"));
+		MeshComp->AttachToComponent(GetCapsuleComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+		MeshComp->SetRelativeLocation(FVector(0, 0, -GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
+		MeshComp->SetRelativeRotation(InitialMeshRelativeRotation);
+	}
+	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
+}
+
+void ASkateCharacter::TeleportPlayerToPlayerStart(AController* PlayerController)
+{
+	if (!PlayerController) return;
+
+	UWorld* World = PlayerController->GetWorld();
+	if (!World) return;
+
+	for (TActorIterator<APlayerStart> It(World); It; ++It)
+	{
+		APlayerStart* PlayerStart = *It;
+		if (PlayerStart)
+		{
+			APawn* Pawn = PlayerController->GetPawn();
+			if (Pawn)
+			{
+				FVector Location = PlayerStart->GetActorLocation();
+				FRotator Rotation = PlayerStart->GetActorRotation();
+
+				// Mueve y rota el Pawn
+				Pawn->SetActorLocationAndRotation(Location, Rotation, false, nullptr, ETeleportType::TeleportPhysics);
+
+				// También reinicia la rotación del Controller
+				PlayerController->SetControlRotation(Rotation);
+			}
+			break;
+		}
+	}
+}
+
 
 void ASkateCharacter::Move(const FInputActionValue& InputValue)
 {
@@ -248,10 +301,25 @@ void ASkateCharacter::NotifyHit(UPrimitiveComponent* MyComp, AActor* Other, UPri
 	// Si la normal no apunta mayormente hacia arriba o abajo
 	if (FMath::Abs(VerticalDot) < 0.5f)
 	{
-		Fall();
-		
+		if (bIsPush)
+		{
+			Fall();
+		}
 	}
+	/*
+	if (Other && Other->IsA<AObstacle>())
+	{
+		AddPoints(10);
+	}
+	*/
+	
 }
 
+void ASkateCharacter::AddPoints(int32 Amount)
+{
+	Score += Amount;
+	UE_LOG(LogTemp, Log, TEXT("Puntos sumados: %d | Total: %d"), Amount, Score);
+
+}
 
 
