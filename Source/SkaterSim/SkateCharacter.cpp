@@ -1,17 +1,24 @@
-
 #include "SkaterSim/SkateCharacter.h"
 #include "InputMappingContext.h"
 #include "EnhancedInputSubsystems.h"
 #include "EnhancedInputComponent.h"
 #include "Camera/CameraComponent.h"
+#include "SkaterUI.h"
+#include "Blueprint/UserWidget.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "GameFramework/PlayerStart.h"
+#include "EngineUtils.h"
+#include "Obstacle.h"
 
 // Sets default values
 ASkateCharacter::ASkateCharacter()
 {
  	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
+	
 
 	SpringArm = CreateDefaultSubobject<USpringArmComponent>("Spring Arm");
 	SpringArm->SetupAttachment(RootComponent);
@@ -23,19 +30,96 @@ ASkateCharacter::ASkateCharacter()
 	bUseControllerRotationYaw = false;
 	GetCharacterMovement()->bOrientRotationToMovement = false;
 
+	Skateboard = CreateDefaultSubobject<UStaticMeshComponent>("Skateboard");
+	Skateboard->SetupAttachment(RootComponent);
+	GetMesh()->SetupAttachment(Skateboard);
+	
+	RailCollider = CreateDefaultSubobject<UBoxComponent>("Rail Collider");
+	RailCollider->SetupAttachment(Skateboard);
+
+	PlayerHUDClass = nullptr;
+	PlayerHUD = nullptr;
+
 }
 
 // Called when the game starts or when spawned
 void ASkateCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (IsLocallyControlled() && PlayerHUDClass)
+	{
+		PlayerHUD = CreateWidget<USkaterUI>(GetWorld(), PlayerHUDClass);
+		check(PlayerHUD);
+		PlayerHUD->AddToPlayerScreen();
+
+	}
+
+	if (auto* Move = GetCharacterMovement())
+	{
+		SavedGroundFriction = Move->GroundFriction;
+		SavedBrakingFrictionFactor = Move->BrakingFrictionFactor;
+		SavedBrakingDecel = Move->BrakingDecelerationWalking;
+
+		Move->bOrientRotationToMovement = true; 
+		Move->RotationRate = FRotator(0.f, 540.f, 0.f);
+	}
+	InitialMeshRelativeRotation = GetMesh()->GetRelativeRotation();
+	PrimaryActorTick.bCanEverTick = true;
+
+
 }
 
 // Called every frame
 void ASkateCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	if (bIsRolling)
+	{
+		//UE_LOG(LogTemp, Warning, TEXT("Strength = %f"), Strength);
+		if (!GetCharacterMovement()->IsFalling() && !bIsFall)
+		{
+			AddMovementInput(SteeringInputY);
 
+		}	
+	}
+
+	
+	UCharacterMovementComponent* Move = GetCharacterMovement();
+	if (!Move) return;
+
+	if (Move->IsMovingOnGround() && Move->CurrentFloor.bBlockingHit)
+	{
+		const FVector FloorNormal = Move->CurrentFloor.HitResult.ImpactNormal.GetSafeNormal();
+
+		// Yaw del actor se mantiene (gira solo sobre Z para dirección)
+		const float Yaw = GetActorRotation().Yaw;
+
+		// Cuaternión que alinea el "Up" (Z) del mesh con la normal del piso
+		const FQuat AlignUp = FQuat::FindBetweenNormals(FVector::UpVector, FloorNormal);
+
+		// Combinamos: primero yaw, luego inclinación por la normal
+		const FQuat YawQ = FQuat(FRotator(0.f, Yaw, 0.f));
+		const FQuat Target = AlignUp * YawQ;
+
+		// Suavizado opcional
+		const float TiltInterpSpeed = 12.f;
+		const FQuat NewQuat = FQuat::Slerp(Skateboard->GetComponentQuat(), Target, FMath::Clamp(DeltaTime * TiltInterpSpeed, 0.f, 1.f));
+
+		Skateboard->SetWorldRotation(NewQuat);
+	}
+	else
+	{
+		// En aire u otra cosa: vuelve a solo yaw (sin inclinación)
+		const float Yaw = GetActorRotation().Yaw;
+		const FQuat Target = FQuat(FRotator(0.f, Yaw, 0.f));
+
+		const float RecoverSpeed = 10.f;
+		const FQuat NewQuat = FQuat::Slerp(Skateboard->GetComponentQuat(), Target, FMath::Clamp(DeltaTime * RecoverSpeed, 0.f, 1.f));
+		Skateboard->SetWorldRotation(NewQuat);
+	}
+
+	
 }
 
 // Called to bind functionality to input
@@ -53,11 +137,11 @@ void ASkateCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 
 	if (UEnhancedInputComponent* Input = CastChecked<UEnhancedInputComponent>(PlayerInputComponent))
 	{
-		Input->BindAction(Push, ETriggerEvent::Completed, this, &ASkateCharacter::PushInput);
+		Input->BindAction(Push, ETriggerEvent::Started, this, &ASkateCharacter::PushInput);
+		Input->BindAction(Push, ETriggerEvent::Completed, this, &ASkateCharacter::PushInputEnd);
 		Input->BindAction(JumpAction, ETriggerEvent::Triggered, this, &ASkateCharacter::JumpInput);
 		Input->BindAction(BreakAction, ETriggerEvent::Triggered, this, &ASkateCharacter::BreakInput);
 		Input->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ASkateCharacter::Move);
-		Input->BindAction(LookAction, ETriggerEvent::Triggered, this, &ASkateCharacter::Look);
 	
 	}
 
@@ -65,46 +149,191 @@ void ASkateCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 
 void ASkateCharacter::PushInput()
 {
-	GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Red, "Pressed input action push");
+	//GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Red, "Pressed input action push");
+	GetCharacterMovement()->MaxWalkSpeed =  PushStrength;
+	bIsPush = true;
+}
+void ASkateCharacter::PushInputEnd()
+{
+	//GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Red, "Completed input action push");
+	GetCharacterMovement()->MaxWalkSpeed = MinStrength;
+	bIsPush = false;
 }
 
 void ASkateCharacter::JumpInput()
 {
+	//if (!bCanJumpAgain || !GetCharacterMovement()->IsMovingOnGround())
+	if (!bCanJumpAgain)
+		return;
+
+	if (bIsPush)
+	{
+		GetCharacterMovement()->JumpZVelocity = JumpMaxhStrength;
+	}
+	else
+	{
+		GetCharacterMovement()->JumpZVelocity = JumpMinhStrength;
+	}
 	ACharacter::Jump();
+	bCanJumpAgain = false;
+	GetWorldTimerManager().SetTimer(JumpCooldownTimer, this, &ASkateCharacter::ResetJump, 1.f, false); // 0.3 segundos de cooldown
+}
+
+void ASkateCharacter::ResetJump()
+{
+	bCanJumpAgain = true;
 }
 
 void ASkateCharacter::BreakInput()
 {
 	GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Red, "Pressed input action break");
+	bIsRolling = false;
 }
+
+void ASkateCharacter::Fall()
+{
+	bIsFall = true;
+	BreakInput();
+	GetCharacterMovement()->DisableMovement();
+	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	USkeletalMeshComponent* MeshComp = GetMesh();
+	if (MeshComp)
+	{
+		MeshComp->SetCollisionProfileName(TEXT("Ragdoll"));
+		MeshComp->SetSimulatePhysics(true);
+	}
+	GetWorldTimerManager().SetTimer(FallResetTimer, this, &ASkateCharacter::ResetFall, 2.0f, false);
+}
+
+void ASkateCharacter::ResetFall()
+{
+	ResetRagdoll();
+	BreakInput();
+	bIsFall = false;
+	TeleportPlayerToPlayerStart(GetWorld()->GetFirstPlayerController());
+}
+
+void ASkateCharacter::ResetRagdoll()
+{
+	USkeletalMeshComponent* MeshComp = GetMesh();
+	if (MeshComp)
+	{
+		MeshComp->SetSimulatePhysics(false);
+		MeshComp->SetCollisionProfileName(TEXT("CharacterMesh"));
+		MeshComp->AttachToComponent(GetCapsuleComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+		MeshComp->SetRelativeLocation(FVector(0, 0, -GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
+		MeshComp->SetRelativeRotation(InitialMeshRelativeRotation);
+	}
+	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
+}
+
+void ASkateCharacter::TeleportPlayerToPlayerStart(AController* PlayerController)
+{
+	if (!PlayerController) return;
+
+	UWorld* World = PlayerController->GetWorld();
+	if (!World) return;
+
+	for (TActorIterator<APlayerStart> It(World); It; ++It)
+	{
+		APlayerStart* PlayerStart = *It;
+		if (PlayerStart)
+		{
+			APawn* Pawn = PlayerController->GetPawn();
+			if (Pawn)
+			{
+				FVector Location = PlayerStart->GetActorLocation();
+				FRotator Rotation = PlayerStart->GetActorRotation();
+
+				// Mueve y rota el Pawn
+				Pawn->SetActorLocationAndRotation(Location, Rotation, false, nullptr, ETeleportType::TeleportPhysics);
+
+				// También reinicia la rotación del Controller
+				PlayerController->SetControlRotation(Rotation);
+			}
+			break;
+		}
+	}
+}
+
 
 void ASkateCharacter::Move(const FInputActionValue& InputValue)
 {
 	FVector2D InputVector = InputValue.Get<FVector2D>();
+	if (!IsValid(Controller)) return;
 
-	if (IsValid(Controller))
+	//Get forward dirction
+	const FRotator Rotation = Controller->GetControlRotation();
+	const FRotator YawRotation(0, Rotation.Yaw, 0);
+
+	const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+	const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+
+	
+	SteeringInputY = ForwardDirection;
+
+	const bool bForwardNow = (InputVector.Y > PushThreshold);
+
+	if (!bIsRolling && InputVector.Y > PushThreshold)
 	{
-		//Get forward dirction
-		const FRotator Rotation = Controller->GetControlRotation();
-		const FRotator YawRotation(0, Rotation.Yaw, 0);
+		//UE_LOG(LogTemp, Warning, TEXT("ForwardNow: X=%f"), bForwardNow);
+		bIsRolling = true;
+		if (PushAnimation)
+		{
+			//GetMesh()->PlayAnimation(PushAnimation, false);
+		}
+	}
+	// Freno (reduce CruiseSpeed)
+	if (bIsRolling && InputVector.Y < BrakeThreshold)
+	{
+		BreakInput();
+	}
 
-		const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-		const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
-
+	AddControllerYawInput(InputVector.X * TurnRateDegPerSec);
 		// Add movement input
+		/*
 		UE_LOG(LogTemp, Warning, TEXT("InputVector: X=%f, Y=%f"), InputVector.X, InputVector.Y);
 		AddMovementInput(ForwardDirection, InputVector.Y);
 		AddMovementInput(RightDirection, InputVector.X);
-	}
+		*/
+	
 }
 
-void ASkateCharacter::Look(const FInputActionValue& InputValue)
+void ASkateCharacter::NotifyHit(UPrimitiveComponent* MyComp, AActor* Other, UPrimitiveComponent* OtherComp,
+	bool bSelfMoved, FVector HitLocation, FVector HitNormal,
+	FVector NormalImpulse, const FHitResult& Hit)
 {
-	FVector2D InputVector = InputValue.Get<FVector2D>();
+	Super::NotifyHit(MyComp, Other, OtherComp, bSelfMoved, HitLocation, HitNormal, NormalImpulse, Hit);
 
-	if (IsValid(Controller))
+	// Considerar solo colisiones horizontales (ignorar suelo o techo)
+	float VerticalDot = FVector::DotProduct(HitNormal, FVector::UpVector); // = HitNormal.Z
+
+	// Si la normal no apunta mayormente hacia arriba o abajo
+	if (FMath::Abs(VerticalDot) < 0.5f)
 	{
-		AddControllerYawInput(InputVector.X);
-		AddControllerPitchInput(InputVector.Y);
+		if (bIsPush)
+		{
+			Fall();
+		}
 	}
+	/*
+	if (Other && Other->IsA<AObstacle>())
+	{
+		AddPoints(10);
+	}
+	*/
+	
 }
+
+void ASkateCharacter::AddPoints(int32 Amount)
+{
+	Score += Amount;
+	PlayerHUD->SetPoints(Score);
+	UE_LOG(LogTemp, Log, TEXT("Puntos sumados: %d | Total: %d"), Amount, Score);
+
+}
+
+
