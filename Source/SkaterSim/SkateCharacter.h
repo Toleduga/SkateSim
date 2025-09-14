@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "InputActionValue.h"
+#include "Components/BoxComponent.h"
 #include "SkateCharacter.generated.h"
 
 
@@ -22,6 +23,7 @@ class SKATERSIM_API ASkateCharacter : public ACharacter
 
 	UPROPERTY(EditAnywhere)
 	class UAnimSequence* PushAnimation;
+
 
 
 protected:
@@ -97,6 +99,10 @@ protected:
 public:
 	// Sets default values for this character's properties
 	ASkateCharacter();
+
+	UPROPERTY(VisibleAnywhere)
+	UBoxComponent* RailCollider;
+
 	bool bIsFall = false;
 
 protected:

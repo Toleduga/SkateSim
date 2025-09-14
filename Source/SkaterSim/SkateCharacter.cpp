@@ -28,7 +28,9 @@ ASkateCharacter::ASkateCharacter()
 	Skateboard = CreateDefaultSubobject<UStaticMeshComponent>("Skateboard");
 	Skateboard->SetupAttachment(RootComponent);
 	GetMesh()->SetupAttachment(Skateboard);
-	//Skateboard->SetupAttachment(GetMesh(), FName("SkateBoardSocket"));
+	
+	RailCollider = CreateDefaultSubobject<UBoxComponent>("Rail Collider");
+	RailCollider->SetupAttachment(Skateboard);
 
 }
 
